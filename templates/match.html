@@ -1,53 +1,202 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-Hant">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ match.home }} vs {{ match.away }} — Football Platform</title>
+  <title>{{ match.home }} 對 {{ match.away }} — 足球平台</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <header class="top">
     <div>
-      <p><a class="link" href="/">← Dashboard</a></p>
-      <h1>{{ match.home }} vs {{ match.away }}</h1>
-      <p class="sub">{{ match.league }} · {{ match.country }} · {{ match.date }} · {{ now_hkt }}</p>
+      <p><a class="link" href="/">← 返回儀表板</a></p>
+      <h1>{{ match.home }} 對 {{ match.away }}</h1>
+      <p class="sub">{{ match.league }} · {{ country_zh.get(match.country, match.country) }} · {{ match.date }} · {{ now_hkt }}</p>
     </div>
   </header>
   <aside class="disclaimer">{{ disclaimer }}</aside>
 
   <section class="panels">
     <div class="card">
-      <h2>Fixture</h2>
-      <p>Kickoff UTC: <span class="mono">{{ match.kickoff_utc or '—' }}</span></p>
-      <p>Kickoff HKT: <span class="mono">{{ match.kickoff_hkt or '—' }}</span></p>
-      <p>Status: <span class="status s-{{ match.status }}">{{ match.status }}</span>
-        {% if match.home_score is not none %} · Score {{ match.home_score }}–{{ match.away_score }}{% endif %}
+      <h2>賽事資料</h2>
+      <p>開賽（UTC）：<span class="mono">{{ match.kickoff_utc or '—' }}</span></p>
+      <p>開賽（香港時間）：<span class="mono">{{ match.kickoff_hkt or '—' }}</span></p>
+      <p>狀態：<span class="status s-{{ match.status }}">{{ status_zh.get(match.status, match.status) }}</span>
+        {% if match.home_score is not none %} · 比分 {{ match.home_score }}–{{ match.away_score }}{% endif %}
       </p>
-      <p>Venue: {{ match.venue or '—' }}</p>
-      <p class="muted">Source: {{ match.source }} / {{ match.source_id }}</p>
+      <p>場地：{{ match.venue or '—' }}</p>
+      <p class="muted">來源：{{ match.source }} / {{ match.source_id }}</p>
     </div>
     <div class="card">
-      <h2>Prediction</h2>
+      <h2>預測</h2>
       {% if prediction %}
       <div class="probs">
-        <div><span class="lbl">Home</span><strong>{{ '%.1f'|format(prediction.p_home*100) }}%</strong></div>
-        <div><span class="lbl">Draw</span><strong>{{ '%.1f'|format(prediction.p_draw*100) }}%</strong></div>
-        <div><span class="lbl">Away</span><strong>{{ '%.1f'|format(prediction.p_away*100) }}%</strong></div>
+        <div><span class="lbl">主勝</span><strong>{{ '%.1f'|format(prediction.p_home*100) }}%</strong></div>
+        <div><span class="lbl">和局</span><strong>{{ '%.1f'|format(prediction.p_draw*100) }}%</strong></div>
+        <div><span class="lbl">客勝</span><strong>{{ '%.1f'|format(prediction.p_away*100) }}%</strong></div>
       </div>
-      <p>Likely scoreline: <strong class="mono">{{ prediction.score_home }}–{{ prediction.score_away }}</strong></p>
-      <p class="muted">λ={{ prediction.lambda_home }} / {{ prediction.lambda_away }} · model={{ prediction.model }}</p>
+      {% if consensus_blend and consensus_blend.blended %}
+      <p><span class="badge badge-consensus">{% set _lab = {'model':'模型','market':'市場','clubelo':'ClubElo','experts':'專家','pi_ratings':'Pi-ratings','quantum_inspired':'量子啟發'} -%}
+含 {% for s in (consensus_blend.sources or []) %}{{ _lab.get(s, s) }}{% if not loop.last %}／{% endif %}{% endfor %}</span>
+         <span class="muted tiny">權重 {{ consensus_blend.weights }}</span></p>
+      {% endif %}
+      <p>人性化比分：<strong class="mono">{{ prediction.score_home }}–{{ prediction.score_away }}</strong>{% if prediction.stat_score_home is defined and (prediction.stat_score_home != prediction.score_home or prediction.stat_score_away != prediction.score_away) %} · 統計最可能 <span class="mono">{{ prediction.stat_score_home }}–{{ prediction.stat_score_away }}</span>{% endif %}
+        {% if top_scorelines and top_scorelines|length > 0 %}
+          <span class="muted tiny">（首選：前五中最高）</span>
+        {% endif %}
+      </p>
+      <p class="muted">λ={{ prediction.lambda_home }} / {{ prediction.lambda_away }} · 模型={{ prediction.model }}</p>
       {% else %}
-      <p class="muted">No prediction yet.</p>
+      <p class="muted">尚未有預測。</p>
       {% endif %}
     </div>
   </section>
 
+  {% if top_scorelines %}
+  <section class="card scorelines-card">
+    <h2>最可能比分 · 其他可能</h2>
+    <p class="muted tiny">顯示分數矩陣前五；唔再只睇單一 mode，避免長期塌成 1-1／1-0。</p>
+    <div class="score-bars">
+      {% set maxp = top_scorelines[0].p if top_scorelines else 1 %}
+      {% for s in top_scorelines %}
+      <div class="score-bar-row {% if loop.first %}primary{% endif %}">
+        <span class="mono score-label">{{ s.home }}–{{ s.away }}</span>
+        <div class="bar-track"><div class="bar-fill" style="width: {{ '%.1f'|format((s.p / maxp) * 100 if maxp else 0) }}%"></div></div>
+        <span class="mono pct">{{ '%.1f'|format(s.p * 100) }}%</span>
+        {% if loop.first %}<span class="pill">最可能</span>{% else %}<span class="muted tiny">其他可能</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if consensus %}
+  <section class="panels">
+    {% if consensus.clubelo %}
+    <div class="card">
+      <h2>ClubElo 共識</h2>
+      <p class="muted tiny">公開 API（api.clubelo.com）· mode={{ consensus.clubelo.mode }}</p>
+      <div class="probs">
+        <div><span class="lbl">主勝</span><strong>{{ '%.1f'|format(consensus.clubelo.p_home*100) }}%</strong></div>
+        <div><span class="lbl">和局</span><strong>{{ '%.1f'|format(consensus.clubelo.p_draw*100) }}%</strong></div>
+        <div><span class="lbl">客勝</span><strong>{{ '%.1f'|format(consensus.clubelo.p_away*100) }}%</strong></div>
+      </div>
+      {% if consensus.clubelo.matched_home %}
+      <p class="muted tiny">對應：{{ consensus.clubelo.matched_home }} vs {{ consensus.clubelo.matched_away }}
+        {% if consensus.clubelo.elo_home %} · Elo {{ consensus.clubelo.elo_home }} / {{ consensus.clubelo.elo_away }}{% endif %}
+      </p>
+      {% endif %}
+      {% if consensus.clubelo.note %}<p class="muted tiny">{{ consensus.clubelo.note }}</p>{% endif %}
+      {% if consensus.clubelo.top_scorelines %}
+      <ul class="chips">
+        {% for s in consensus.clubelo.top_scorelines[:5] %}
+        <li class="mono">{{ s.home }}–{{ s.away }} {{ '%.1f'|format(s.p*100) }}%</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </div>
+    {% endif %}
+    {% if consensus.market %}
+    <div class="card">
+      <h2>市場隱含機率（公開賠率，非投注建議）</h2>
+      <p class="muted tiny">來源：{{ consensus.market.source }} · {{ consensus.market.book }} ·
+        {% if consensus.market.method == 'shin1993' %}Shin (1993) 去 overround{% else %}已去除 overround{% endif %}</p>
+      <div class="probs">
+        <div><span class="lbl">主勝</span><strong>{{ '%.1f'|format(consensus.market.p_home*100) }}%</strong></div>
+        <div><span class="lbl">和局</span><strong>{{ '%.1f'|format(consensus.market.p_draw*100) }}%</strong></div>
+        <div><span class="lbl">客勝</span><strong>{{ '%.1f'|format(consensus.market.p_away*100) }}%</strong></div>
+      </div>
+      {% if consensus.market.odds %}
+      <p class="mono muted tiny">賠率 H/D/A {{ consensus.market.odds.H }} / {{ consensus.market.odds.D }} / {{ consensus.market.odds.A }}</p>
+      {% endif %}
+      <p class="disclaimer-inline">僅供統計對照，並非博彩建議。</p>
+    </div>
+    {% endif %}
+    {% if consensus.pi_ratings %}
+    <div class="card">
+      <h2>Pi-ratings（開源 · Constantinou &amp; Fenton）</h2>
+      <p class="muted tiny">主／客分開能力 · 預期淨勝球 {{ consensus.pi_ratings.expected_gd }}</p>
+      <div class="probs">
+        <div><span class="lbl">主勝</span><strong>{{ '%.1f'|format(consensus.pi_ratings.p_home*100) }}%</strong></div>
+        <div><span class="lbl">和局</span><strong>{{ '%.1f'|format(consensus.pi_ratings.p_draw*100) }}%</strong></div>
+        <div><span class="lbl">客勝</span><strong>{{ '%.1f'|format(consensus.pi_ratings.p_away*100) }}%</strong></div>
+      </div>
+    </div>
+    {% endif %}
+    {% if consensus.quantum_inspired %}
+    <div class="card">
+      <h2>量子啟發混合（實驗）</h2>
+      <p class="muted tiny">{{ consensus.quantum_inspired.method }} · 經典振幅＋Born 規則；<strong>非量子硬體</strong></p>
+      <div class="probs">
+        <div><span class="lbl">主勝</span><strong>{{ '%.1f'|format(consensus.quantum_inspired.p_home*100) }}%</strong></div>
+        <div><span class="lbl">和局</span><strong>{{ '%.1f'|format(consensus.quantum_inspired.p_draw*100) }}%</strong></div>
+        <div><span class="lbl">客勝</span><strong>{{ '%.1f'|format(consensus.quantum_inspired.p_away*100) }}%</strong></div>
+      </div>
+      {% if consensus.quantum_inspired.note %}<p class="muted tiny">{{ consensus.quantum_inspired.note }}</p>{% endif %}
+    </div>
+    {% endif %}
+    {% if consensus.model_only %}
+    <div class="card">
+      <h2>模型原值（混合前）</h2>
+      <div class="probs">
+        <div><span class="lbl">主勝</span><strong>{{ '%.1f'|format(consensus.model_only.p_home*100) }}%</strong></div>
+        <div><span class="lbl">和局</span><strong>{{ '%.1f'|format(consensus.model_only.p_draw*100) }}%</strong></div>
+        <div><span class="lbl">客勝</span><strong>{{ '%.1f'|format(consensus.model_only.p_away*100) }}%</strong></div>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {% if consensus and (consensus.experts or consensus.media) %}
   <section class="card">
-    <h2>Feature breakdown</h2>
+    <h2>專家／媒體意見</h2>
+    <p class="muted tiny">PredictZ、Facebook、Threads 等<strong>只接受人手匯入</strong>（CSV／JSON），唔會自動爬取（ToS／無官方 API）。公開媒體僅用 RSS 標題。</p>
+    {% if consensus.experts %}
+    <h3>專家提示（已匯入）</h3>
+    <div class="probs">
+      {% if consensus.experts.p_home is not none %}
+      <div><span class="lbl">主勝</span><strong>{{ '%.1f'|format(consensus.experts.p_home*100) }}%</strong></div>
+      <div><span class="lbl">和局</span><strong>{{ '%.1f'|format(consensus.experts.p_draw*100) }}%</strong></div>
+      <div><span class="lbl">客勝</span><strong>{{ '%.1f'|format(consensus.experts.p_away*100) }}%</strong></div>
+      {% endif %}
+    </div>
+    {% if consensus.experts.majority %}<p>多數看法：<strong>{{ consensus.experts.majority }}</strong> · n={{ consensus.experts.n }}</p>{% endif %}
+    {% if consensus.experts.tips %}
+    <ul class="tips-list">
+      {% for tip in consensus.experts.tips %}
+      <li>
+        <strong>{{ tip.analyst or tip.source or '—' }}</strong>
+        {% if tip.pick_1x2 %} · 選 {{ tip.pick_1x2 }}{% endif %}
+        {% if tip.score %} · 比分 {{ tip.score }}{% endif %}
+        {% if tip.url %} · <a class="link" href="{{ tip.url }}" rel="noopener noreferrer" target="_blank">連結</a>{% endif %}
+        {% if tip.notes %}<div class="muted tiny">{{ tip.notes }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if consensus.experts.note %}<p class="muted tiny">{{ consensus.experts.note }}</p>{% endif %}
+    {% endif %}
+    {% if consensus.media %}
+    <h3>媒體標題（RSS）</h3>
+    <ul class="tips-list">
+      {% for n in consensus.media %}
+      <li>
+        <span class="pill">{{ n.source }}</span>
+        {% if n.url %}<a class="link" href="{{ n.url }}" rel="noopener noreferrer" target="_blank">{{ n.title }}</a>{% else %}{{ n.title }}{% endif %}
+        {% if n.matched_keywords %}<div class="muted tiny">關鍵字：{{ n.matched_keywords|join(', ') }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>特徵拆解</h2>
     {% if factors %}
     <table>
-      <thead><tr><th>Factor</th><th>Value</th><th>Role</th></tr></thead>
+      <thead><tr><th>因素</th><th>數值</th><th>作用</th></tr></thead>
       <tbody>
         {% for f in factors %}
         <tr>
@@ -59,10 +208,10 @@
       </tbody>
     </table>
     {% else %}
-    <p class="muted">No factors stored.</p>
+    <p class="muted">未有儲存因素。</p>
     {% endif %}
 
-    <h3>Feature matrix (live vs stub)</h3>
+    <h3>特徵狀態（已接線／暫緩）</h3>
     {% if feature_matrix %}
     <ul class="chips">
       {% for k,v in feature_matrix.items() %}
@@ -71,9 +220,9 @@
     </ul>
     {% endif %}
 
-    <h3>Weather</h3>
+    <h3>天氣</h3>
     <pre class="code">{{ weather_json }}</pre>
-    <h3>Fixture load</h3>
+    <h3>賽程負荷</h3>
     <pre class="code">{{ load_json }}</pre>
   </section>
 </body>

@@ -1,0 +1,6 @@
+match_date,home,away,source,analyst_name,pick_1x2,score_home,score_away,confidence,url,notes
+2026-09-04,Ipswich,Liverpool,predictz_manual,PredictZ Community,A,0,2,1.0,https://www.predictz.com/predictions/,Manually copied — do not scrape
+2026-09-04,Ipswich,Liverpool,threads_manual,Local Threads tipster,A,1,2,0.8,,User asked; imported by hand
+2026-09-04,Stuttgart,FC Koln,bbc_roundup,BBC preview desk,H,2,1,0.7,https://www.bbc.com/sport/football,From public preview notes
+2026-09-04,Hannover,Karlsruhe,facebook_manual,FB group tip,H,2,0,0.6,,Manual paste from public post
+2026-09-05,Lincoln,Southampton,espn_manual,ESPN soccer desk,A,1,2,0.75,https://www.espn.com/soccer/,Public media note

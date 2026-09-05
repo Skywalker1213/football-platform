@@ -54,34 +54,20 @@ CACHE_TTL_SEC = 6 * 60 * 60  # 6 hours
 
 # ESPN soccer league slugs (public scoreboard endpoints)
 ESPN_LEAGUES: List[Tuple[str, str, str]] = [
-    # slug, country hint, league name fallback — scoped to platform allowlist (+ a few extras filtered later)
+    # Level-1 domestic + UCL + internationals only
     ("eng.1", "England", "English Premier League"),
-    ("eng.2", "England", "English League Championship"),
-    ("eng.3", "England", "English League One"),
-    ("eng.4", "England", "English League Two"),
-    ("eng.fa", "England", "English FA Cup"),
-    ("eng.league_cup", "England", "English Carabao Cup"),
     ("esp.1", "Spain", "Spanish La Liga"),
-    ("esp.2", "Spain", "Spanish La Liga 2"),
     ("ger.1", "Germany", "German Bundesliga"),
-    ("ger.2", "Germany", "German 2. Bundesliga"),
     ("ned.1", "Netherlands", "Dutch Eredivisie"),
-    ("ned.2", "Netherlands", "Dutch Eerste Divisie"),
     ("sco.1", "Scotland", "Scottish Premiership"),
-    ("sco.2", "Scotland", "Scottish Championship"),
     ("sui.1", "Switzerland", "Swiss Super League"),
-    ("sui.2", "Switzerland", "Swiss Challenge League"),
     ("uefa.champions", "Europe", "UEFA Champions League"),
-    ("uefa.europa", "Europe", "UEFA Europa League"),
-    ("uefa.europa.conf", "Europe", "UEFA Conference League"),
-    ("uefa.nations", "Europe", "UEFA Nations League"),
+    ("uefa.nations", "International", "UEFA Nations League"),
+    ("fifa.worldq", "International", "FIFA World Cup Qualifiers"),
 ]
 
 OPENLIGA_SHORTCUTS = [
     ("bl1", "Germany", "1. Bundesliga"),
-    ("bl2", "Germany", "2. Bundesliga"),
-    ("bl3", "Germany", "3. Liga"),
-    ("dfb", "Germany", "DFB-Pokal"),
 ]
 
 _last_request_at = 0.0
@@ -704,30 +690,13 @@ def fetch_openligadb_range(start: date, end: date) -> List[Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 FD_UK_DIV_META = {
+    # Level-1 allowlist only (lower tiers / cups filtered out via competitions.match_competition)
     "E0": ("England", "Premier League"),
-    "E1": ("England", "Championship"),
-    "E2": ("England", "League One"),
-    "E3": ("England", "League Two"),
     "SP1": ("Spain", "La Liga"),
-    "SP2": ("Spain", "La Liga 2"),
     "D1": ("Germany", "Bundesliga"),
-    "D2": ("Germany", "2. Bundesliga"),
-    "I1": ("Italy", "Serie A"),
-    "I2": ("Italy", "Serie B"),
-    "F1": ("France", "Ligue 1"),
-    "F2": ("France", "Ligue 2"),
     "N1": ("Netherlands", "Eredivisie"),
-    "P1": ("Portugal", "Primeira Liga"),
-    "B1": ("Belgium", "Pro League"),
     "SC0": ("Scotland", "Premiership"),
-    "T1": ("Turkey", "Super Lig"),
-    "G1": ("Greece", "Super League"),
-    "EC": ("Europe", "UEFA Conference / Europe fixtures"),
-    "SC1": ("Scotland", "Championship"),
-    "SC2": ("Scotland", "League One"),
-    "SC3": ("Scotland", "League Two"),
-    "D3": ("Germany", "3. Liga"),
-    "N2": ("Netherlands", "Eerste Divisie"),
+    # Switzerland not always in fd.uk major dump; keep empty — allowlist still filters
 }
 
 
@@ -739,6 +708,27 @@ def _parse_fd_uk_date(s: str) -> Optional[date]:
         except ValueError:
             continue
     return None
+
+
+
+def _fd_uk_extra(r: Dict[str, str], div: str) -> Dict[str, Any]:
+    """Keep referee/div plus market odds for consensus blending."""
+    extra: Dict[str, Any] = {"div": div, "referee": r.get("Referee") or None}
+    odds_keys = [
+        "B365H", "B365D", "B365A",
+        "AvgH", "AvgD", "AvgA",
+        "MaxH", "MaxD", "MaxA",
+        "Avg>2.5", "Avg<2.5", "B365>2.5", "B365<2.5",
+    ]
+    for k in odds_keys:
+        v = r.get(k)
+        if v is None or str(v).strip() == "":
+            continue
+        try:
+            extra[k] = float(v)
+        except (TypeError, ValueError):
+            extra[k] = str(v).strip()
+    return extra
 
 
 def fetch_football_data_uk(start: date, end: date) -> List[Dict[str, Any]]:
@@ -755,7 +745,9 @@ def fetch_football_data_uk(start: date, end: date) -> List[Dict[str, Any]]:
             if not d or d < start or d > end:
                 continue
             div = (r.get("Div") or "").strip()
-            country, league = FD_UK_DIV_META.get(div, (None, div or "Unknown"))
+            if div not in FD_UK_DIV_META:
+                continue  # skip non Level-1 divisions early
+            country, league = FD_UK_DIV_META[div]
             t = (r.get("Time") or "00:00").strip()
             if len(t) == 5:
                 t = t + ":00"
@@ -793,7 +785,7 @@ def fetch_football_data_uk(start: date, end: date) -> List[Dict[str, Any]]:
                     "venue": None,
                     "source": "football-data.co.uk",
                     "source_id": f"{div}:{d.isoformat()}:{(r.get('HomeTeam') or '')}:{(r.get('AwayTeam') or '')}",
-                    "extra": {"div": div, "referee": r.get("Referee") or None},
+                    "extra": _fd_uk_extra(r, div),
                 }
             )
             matches.append(m)
@@ -816,7 +808,7 @@ def fetch_football_data_uk(start: date, end: date) -> List[Dict[str, Any]]:
     y = start.year if start.month >= 7 else start.year - 1
     season_folders.append(f"{str(y)[-2:]}{str(y+1)[-2:]}")  # e.g. 2627
     season_folders.append(f"{str(y-1)[-2:]}{str(y)[-2:]}")  # e.g. 2526
-    codes = ["E0", "E1", "SP1", "D1", "I1", "F1", "N1", "P1", "B1", "SC0"]
+    codes = ["E0", "SP1", "D1", "N1", "SC0"]  # Level-1 only
     total_res = 0
     for folder in season_folders:
         for code in codes:

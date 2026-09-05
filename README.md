@@ -9,6 +9,12 @@ Ops-dashboard style web app for **fixtures/results collection** and **statistica
 
 **Disclaimer:** Outputs are statistical estimates for education / ops visibility — **not gambling advice**.
 
+## Competition scope
+
+Level-1 domestic + internationals + UCL only. See docs/SOURCES.md and app/competitions.py.
+Expert tips: manual import via scripts/import_expert_tips.py (no PredictZ/FB scrape).
+
+
 ## Quick start
 
 ```bash
@@ -23,6 +29,12 @@ PYTHONPATH=. FOOTBALL_SKIP_WEATHER=1 python scripts/seed.py
 # Or collect / predict separately
 PYTHONPATH=. python scripts/collect_cli.py --from 2026-09-02 --to 2026-09-09
 PYTHONPATH=. FOOTBALL_SKIP_WEATHER=1 python scripts/predict_cli.py
+
+# Daily collect + self-learn + predict + report
+PYTHONPATH=. FOOTBALL_SKIP_WEATHER=1 python scripts/daily_update.py
+
+# Windows Task Scheduler (Documents\\football-platform copy; admin may be needed)
+# powershell -ExecutionPolicy Bypass -File scripts\\install_windows_daily_task.ps1
 
 # Run UI
 ./run.sh

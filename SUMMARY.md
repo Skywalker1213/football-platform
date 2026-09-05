@@ -2,72 +2,62 @@
 
 Generated: 2026-09-05 (HKT)
 
-## What works
+## Scope (narrowed)
 
-- Full project at `/workspace/football-platform/` (created locally; no CloudAgent; no GitHub clone).
-- Free-source collector (ESPN, TheSportsDB, OpenLigaDB, football-data.co.uk; optional football-data.org token).
-- Allowlist filter for EN/DE/CH/SCO/ES/NL + UEFA cups + internationals when present.
-- SQLite store with 300+ allowlisted matches for ~2026-09-02 → 2026-09-09.
-- Elo + Poisson/Dixon–Coles predictions with feature breakdown UI.
-- Accuracy panel (result / exact / Brier) on finished matches.
-- Ops dashboard (not betting chrome) with filters + refresh API.
-- Weather via Open-Meteo on match detail (deferred in bulk predict for speed).
+**Level-1 only** for EN/DE/CH/SCO/ES/NL + internationals + **UCL**:
+`eng_pl`, `ger_bl1`, `sui_sl`, `sco_pre`, `esp_ll`, `ned_ere`, `uefa_ucl`, `int_wcq`, `int_euroq`, `int_nl`, `int_fr`.
 
-## How to run
+Dropped lower divisions, domestic cups, Europa League, Conference League.
+
+## Scoreline bias (before → after)
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Predicted mode mass | ~338× `1-1` + 11× `1-0` (almost all) | Still often `1-1` as Poisson mode, but **top-5** now shown (2-1 / 1-0 / 2-0 / …) |
+| `avg_goals` baseline | 1.30–1.35 (learning) | Defaults **1.45**; live param bumped ≈**1.42** |
+| UI | Single mode only | 「最可能比分」+ 「其他可能」bars |
+| Consensus | Model only | Model + **market** (fd.uk odds) + ClubElo when API up + **experts** (manual) |
+
+ClubElo `Fixtures` currently returns *deactivated*; daily Elo API often 502 — predict falls back model/market-only without crashing (negative cache ≥3h).
+
+## Consensus sources
+
+| Source | Status |
+|--------|--------|
+| ClubElo Fixtures / Elo | Live API with cache; graceful fallback |
+| football-data.co.uk Avg/B365 odds | Live in `extra` → `consensus.market` |
+| Expert tips (PredictZ/FB/Threads/media) | **Manual CSV/JSON import only** — no scrapers |
+| BBC / ESPN soccer RSS | Headlines → `media_notes` (not tipster scrapes) |
+
+Blend defaults: model/clubelo/market **0.40/0.35/0.25**; model/clubelo **0.55/0.45**; experts **~0.15** when tips match. Weights in `model_params`.
+
+## How to refresh
 
 ```bash
 cd /workspace/football-platform
-source .venv/bin/activate   # already created
-./run.sh
-```
-
-Open **http://127.0.0.1:8765/** (binds `0.0.0.0:8765`).
-
-**Dev server status:** RUNNING in background on port **8765**.
-
-Refresh data from UI button or:
-
-```bash
+source .venv/bin/activate
+PYTHONPATH=. FOOTBALL_SKIP_WEATHER=1 python scripts/daily_update.py
+# or
 PYTHONPATH=. python scripts/collect_cli.py
 PYTHONPATH=. FOOTBALL_SKIP_WEATHER=1 python scripts/predict_cli.py
+PYTHONPATH=. python scripts/import_expert_tips.py data/expert_tips.example.csv --link-matches
+PYTHONPATH=. python scripts/import_expert_tips.py --fetch-rss
+./run.sh   # http://127.0.0.1:8765/
 ```
 
-## Sample predictions (after seed)
+## Files touched (this pass)
 
-| Match | P(H/D/A) | Scoreline |
-|-------|----------|-----------|
-| Manchester City vs Coventry City | ~67% / 21% / 12% | 2–0 |
-| Arsenal vs Chelsea | ~55% / 25% / 20% | 1–1 |
-| Newcastle vs Bournemouth | ~56% / 24% / 19% | 1–1 |
-| Ipswich Town 0–2 Liverpool (finished backtest) | ~40% / 27% / 33% | 1–1 |
+- `app/consensus.py` — ClubElo, market odds, experts aggregate, RSS
+- `app/predict.py` — `top_scorelines`, blend, raised AVG_GOALS
+- `app/db.py` — blend defaults, `expert_tips` / `media_notes`
+- `app/collector_core.py` — odds in extra; Level-1 ESPN/FD filters
+- `app/competitions.py` — Level-1 allowlist
+- `templates/match.html`, `index.html`, `static/style.css`
+- `scripts/import_expert_tips.py`, `data/expert_tips.example.csv`
+- `docs/SOURCES.md`
 
-Exact numbers drift as Elo recalculates.
+## Caveats
 
-## Live vs stubbed
-
-| Area | State |
-|------|-------|
-| Collect fixtures/results | Live |
-| Browse + filters | Live |
-| Elo / Poisson predictions | Live |
-| Fixture load + team form | Live (form sparse early season window) |
-| Weather | Live on detail; deferred in bulk |
-| Player form | Stub |
-| Injuries | Stub |
-| Mental state | Documented unavailable (load proxies only) |
-
-## Blockers / caveats
-
-- Free feeds duplicate names (`Man City` vs `Manchester City`) → near-duplicate rows until stronger entity resolution.
-- Some ESPN cup/international slugs return HTTP 400 — removed from default list; cups still arrive via other sources when available.
-- football-data.org empty without `FOOTBALL_DATA_API_TOKEN`.
-- TheSportsDB free key is coverage/rate limited.
-- With a short finished-match window, Elo needs club/tier priors; accuracy is near-chance until more results accumulate (~40% result accuracy on current finished set).
-- No Flashscore/Sofascore/Bet365 (intentional ToS stance).
-
-## Seed snapshot
-
-- Matches: ~316 allowlisted
-- Countries: England, Germany, Netherlands, Spain, Scotland, Europe, Switzerland
-- Predictions: one per match
-- DB: `data/football.db`
+- Free feeds still duplicate club names across sources.
+- Exact-score mode remains Poisson-heavy toward 1-1 at λ≈1.4–1.6; diversity is in **top-5** + market/ClubElo when available.
+- No Flashscore / Sofascore / Forebet / PredictZ auto-scrape (intentional).
