@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT))
 from app import db
 from app.collector_core import collect, today_hkt
 from app.learning import run_learning
-from app.predict import predict_all
+try:\n    import runpy\n    runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts" / "merge_duplicates.py"))\nexcept Exception as _e:\n    print("merge_duplicates skipped:", _e)\nfrom app.predict import predict_all
 
 HKT = timezone(timedelta(hours=8))
 REPORT_PATH = ROOT / "data" / "daily_report.md"

@@ -303,52 +303,176 @@ _TEAM_ALIASES = {
     "man city": "manchester city",
     "man utd": "manchester united",
     "manchester utd": "manchester united",
+    "man united": "manchester united",
     "spurs": "tottenham hotspur",
     "tottenham": "tottenham hotspur",
-    "nott'm forest": "nottingham forest",
     "nottingham forest": "nottingham forest",
     "nott m forest": "nottingham forest",
-    "nott'm forest": "nottingham forest",
+    "nottm forest": "nottingham forest",
     "hull": "hull city",
-    "man united": "manchester united",
     "newcastle": "newcastle united",
     "wolves": "wolverhampton wanderers",
     "wolverhampton": "wolverhampton wanderers",
     "brighton": "brighton and hove albion",
-    "brighton & hove albion": "brighton and hove albion",
+    "brighton and hove albion": "brighton and hove albion",
     "leicester": "leicester city",
+    "leicester city": "leicester city",
     "west ham": "west ham united",
     "birmingham": "birmingham city",
     "cardiff": "cardiff city",
     "swansea": "swansea city",
     "leeds": "leeds united",
-    "leicester city": "leicester city",
     "inter": "inter milan",
     "milan": "ac milan",
     "psg": "paris saint germain",
     "paris sg": "paris saint germain",
+    "paris saint germain": "paris saint germain",
     "ath bilbao": "athletic club",
     "athletic bilbao": "athletic club",
     "atletico": "atletico madrid",
-    "atlético": "atletico madrid",
+    "atletico madrid": "atletico madrid",
     "betis": "real betis",
     "sociedad": "real sociedad",
+    "real sociedad": "real sociedad",
+    # Scotland
+    "hearts": "heart of midlothian",
+    "heart of midlothian": "heart of midlothian",
+    "hibs": "hibernian",
+    "hibernian": "hibernian",
+    "rangers": "rangers",
+    "celtic": "celtic",
+    "st mirren": "st mirren",
+    "st johnstone": "st johnstone",
+    "dundee utd": "dundee united",
+    "dundee united": "dundee united",
+    # Spain
+    "celta": "celta vigo",
+    "celta vigo": "celta vigo",
+    "rc celta": "celta vigo",
+    "sevilla": "sevilla",
+    "barca": "barcelona",
+    "barcelona": "barcelona",
+    "espanyol": "espanyol",
+    "villarreal": "villarreal",
+    "valencia": "valencia",
+    "getafe": "getafe",
+    "osasuna": "osasuna",
+    "mallorca": "mallorca",
+    "girona": "girona",
+    "alaves": "alaves",
+    "rayo": "rayo vallecano",
+    "rayo vallecano": "rayo vallecano",
+    # Netherlands
+    "zwolle": "pec zwolle",
+    "pec zwolle": "pec zwolle",
+    "ajax": "ajax",
+    "psv": "psv eindhoven",
+    "psv eindhoven": "psv eindhoven",
+    "feyenoord": "feyenoord",
+    "az": "az alkmaar",
+    "az alkmaar": "az alkmaar",
+    "sparta rotterdam": "sparta rotterdam",
+    "twente": "twente",
+    "utrecht": "utrecht",
+    "heerenveen": "heerenveen",
+    "nec": "nec nijmegen",
+    "nec nijmegen": "nec nijmegen",
+    "goa ahead eagles": "go ahead eagles",
+    "go ahead eagles": "go ahead eagles",
+    # Germany
+    "koln": "koln",
+    "fc koln": "koln",
+    "1 fc koln": "koln",
+    "cologne": "koln",
+    "bayern": "bayern munich",
+    "bayern munich": "bayern munich",
+    "bayern munchen": "bayern munich",
+    "dortmund": "borussia dortmund",
+    "borussia dortmund": "borussia dortmund",
+    "bvb": "borussia dortmund",
+    "leverkusen": "bayer leverkusen",
+    "bayer leverkusen": "bayer leverkusen",
+    "gladbach": "borussia monchengladbach",
+    "monchengladbach": "borussia monchengladbach",
+    "borussia monchengladbach": "borussia monchengladbach",
+    "leipzig": "rb leipzig",
+    "rb leipzig": "rb leipzig",
+    "frankfurt": "eintracht frankfurt",
+    "eintracht frankfurt": "eintracht frankfurt",
+    "stuttgart": "stuttgart",
+    "vfb stuttgart": "stuttgart",
+    "wolfsburg": "wolfsburg",
+    "mainz": "mainz",
+    "augsburg": "augsburg",
+    "freiburg": "freiburg",
+    "hoffenheim": "hoffenheim",
+    "union berlin": "union berlin",
+    "werder bremen": "werder bremen",
+    "bremen": "werder bremen",
+    "heidenheim": "heidenheim",
+    "st pauli": "st pauli",
+    "coventry": "coventry city",
+    "coventry city": "coventry city",
+    "ipswich": "ipswich town",
+    "ipswich town": "ipswich town",
+    "nijmegen": "nec nijmegen",
+    "feyenoord rotterdam": "feyenoord",
+    "ajax amsterdam": "ajax",
+    "schalke 04": "schalke 04",
+    "fc schalke 04": "schalke 04",
+    "hamburg": "hamburg sv",
+    "hamburg sv": "hamburg sv",
+    "vallecano": "rayo vallecano",
+    "santander": "racing santander",
+    "racing santander": "racing santander",
+    "elversberg": "sv elversberg",
+    "sv 07 elversberg": "sv elversberg",
+    "sv elversberg": "sv elversberg",
+    "paderborn": "sc paderborn 07",
+    "sc paderborn 07": "sc paderborn 07",
+    "tsg hoffenheim": "hoffenheim",
+    "union berlin": "union berlin",
+    "1 fc union berlin": "union berlin",
+    "fc cologne": "koln",
+    "cologne": "koln",
 }
+
 
 
 def _norm_team(name: Optional[str]) -> str:
     s = (name or "").lower().strip()
     s = s.replace("&", " and ")
+    s = s.replace("ü", "u").replace("ö", "o").replace("ä", "a").replace("ß", "ss")
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
-    # drop common suffixes for matching
-    base = re.sub(r"\b(fc|cf|afc|sc|fk|sk|ac)\b", " ", s)
+    # drop common club prefixes/suffixes for matching
+    base = re.sub(r"\b(fc|cf|afc|sc|fk|sk|ac|rc|vfb|sv|tsv|1)\b", " ", s)
     base = re.sub(r"\s+", " ", base).strip()
-    if s in _TEAM_ALIASES:
-        return _TEAM_ALIASES[s]
-    if base in _TEAM_ALIASES:
-        return _TEAM_ALIASES[base]
+    for cand in (s, base):
+        if cand in _TEAM_ALIASES:
+            return _TEAM_ALIASES[cand]
     return base or s
+
+
+def teams_likely_same(a: Optional[str], b: Optional[str]) -> bool:
+    """True if two display names refer to the same club (alias or containment)."""
+    na, nb = _norm_team(a), _norm_team(b)
+    if not na or not nb:
+        return False
+    if na == nb:
+        return True
+    # containment: "celta" vs "celta vigo", "zwolle" vs "pec zwolle"
+    shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
+    if len(shorter) >= 4 and (longer == shorter or longer.startswith(shorter + " ") or longer.endswith(" " + shorter) or f" {shorter} " in f" {longer} "):
+        return True
+    # token overlap (majority of shorter tokens in longer)
+    ta, tb = set(na.split()), set(nb.split())
+    if not ta or not tb:
+        return False
+    inter = ta & tb
+    if len(inter) >= 1 and (inter == ta or inter == tb):
+        return True
+    return False
 
 
 def _norm_league(name: Optional[str]) -> str:
