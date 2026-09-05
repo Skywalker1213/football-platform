@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ match.home }} vs {{ match.away }} — Football Platform</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p><a class="link" href="/">← Dashboard</a></p>
+      <h1>{{ match.home }} vs {{ match.away }}</h1>
+      <p class="sub">{{ match.league }} · {{ match.country }} · {{ match.date }} · {{ now_hkt }}</p>
+    </div>
+  </header>
+  <aside class="disclaimer">{{ disclaimer }}</aside>
+
+  <section class="panels">
+    <div class="card">
+      <h2>Fixture</h2>
+      <p>Kickoff UTC: <span class="mono">{{ match.kickoff_utc or '—' }}</span></p>
+      <p>Kickoff HKT: <span class="mono">{{ match.kickoff_hkt or '—' }}</span></p>
+      <p>Status: <span class="status s-{{ match.status }}">{{ match.status }}</span>
+        {% if match.home_score is not none %} · Score {{ match.home_score }}–{{ match.away_score }}{% endif %}
+      </p>
+      <p>Venue: {{ match.venue or '—' }}</p>
+      <p class="muted">Source: {{ match.source }} / {{ match.source_id }}</p>
+    </div>
+    <div class="card">
+      <h2>Prediction</h2>
+      {% if prediction %}
+      <div class="probs">
+        <div><span class="lbl">Home</span><strong>{{ '%.1f'|format(prediction.p_home*100) }}%</strong></div>
+        <div><span class="lbl">Draw</span><strong>{{ '%.1f'|format(prediction.p_draw*100) }}%</strong></div>
+        <div><span class="lbl">Away</span><strong>{{ '%.1f'|format(prediction.p_away*100) }}%</strong></div>
+      </div>
+      <p>Likely scoreline: <strong class="mono">{{ prediction.score_home }}–{{ prediction.score_away }}</strong></p>
+      <p class="muted">λ={{ prediction.lambda_home }} / {{ prediction.lambda_away }} · model={{ prediction.model }}</p>
+      {% else %}
+      <p class="muted">No prediction yet.</p>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Feature breakdown</h2>
+    {% if factors %}
+    <table>
+      <thead><tr><th>Factor</th><th>Value</th><th>Role</th></tr></thead>
+      <tbody>
+        {% for f in factors %}
+        <tr>
+          <td>{{ f.name }}</td>
+          <td class="mono">{{ f.value }}</td>
+          <td><span class="pill">{{ f.impact }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No factors stored.</p>
+    {% endif %}
+
+    <h3>Feature matrix (live vs stub)</h3>
+    {% if feature_matrix %}
+    <ul class="chips">
+      {% for k,v in feature_matrix.items() %}
+      <li class="{% if v in ['stub','documented_unavailable','unavailable','sparse'] %}stub{% else %}live{% endif %}">{{ k }}: {{ v }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <h3>Weather</h3>
+    <pre class="code">{{ weather_json }}</pre>
+    <h3>Fixture load</h3>
+    <pre class="code">{{ load_json }}</pre>
+  </section>
+</body>
+</html>

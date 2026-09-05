@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Football Platform — Ops Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>Football Platform</h1>
+      <p class="sub">Fixtures · Results · Statistical predictions · {{ now_hkt }}</p>
+    </div>
+    <div class="actions">
+      <button id="btn-refresh" class="btn">Refresh data</button>
+      <span id="refresh-msg" class="muted"></span>
+    </div>
+  </header>
+
+  <aside class="disclaimer">{{ disclaimer }}</aside>
+
+  <section class="panels">
+    <div class="card">
+      <h2>Inventory</h2>
+      <p><strong>{{ counts.matches }}</strong> matches · <strong>{{ counts.predictions }}</strong> predictions</p>
+      <ul class="chips">
+        {% for s, n in counts.by_status.items() %}
+        <li>{{ s }}: {{ n }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Accuracy (finished + predicted)</h2>
+      {% if accuracy.n %}
+      <p>n={{ accuracy.n }} · result {{ '%.1f'|format(accuracy.result_accuracy * 100) }}% ·
+         exact score {{ '%.1f'|format(accuracy.exact_score_accuracy * 100) }}% ·
+         Brier {{ accuracy.brier }}</p>
+      <p class="muted">{{ accuracy.note }}</p>
+      {% else %}
+      <p class="muted">{{ accuracy.note }}</p>
+      {% endif %}
+    </div>
+    <div class="card">
+      <h2>By country</h2>
+      <ul class="chips">
+        {% for c, n in counts.by_country.items() %}
+        <li>{{ c }}: {{ n }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+
+  <form class="filters" method="get" action="/">
+    <label>From <input type="date" name="date_from" value="{{ filters.date_from }}" /></label>
+    <label>To <input type="date" name="date_to" value="{{ filters.date_to }}" /></label>
+    <label>Country
+      <select name="country">
+        <option value="">All</option>
+        {% for c in countries %}
+        <option value="{{ c }}" {% if filters.country==c %}selected{% endif %}>{{ c }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Competition
+      <select name="competition">
+        <option value="">All</option>
+        {% for country, comps in competitions.items() %}
+          <optgroup label="{{ country }}">
+          {% for comp in comps %}
+            <option value="{{ comp.key }}" {% if filters.competition==comp.key %}selected{% endif %}>{{ comp.name }}</option>
+          {% endfor %}
+          </optgroup>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Status
+      <select name="status">
+        <option value="">All</option>
+        {% for s in ['SCHEDULED','LIVE','FINISHED','POSTPONED'] %}
+        <option value="{{ s }}" {% if filters.status==s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn" type="submit">Filter</button>
+  </form>
+
+  <section class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Kickoff (HKT)</th>
+          <th>Competition</th>
+          <th>Match</th>
+          <th>Status</th>
+          <th>P(H / D / A)</th>
+          <th>Scoreline</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for m in matches %}
+        <tr>
+          <td class="mono">
+            {% if m.kickoff_hkt %}{{ m.kickoff_hkt[5:16].replace('T',' ') }}{% else %}{{ m.date }}{% endif %}
+          </td>
+          <td>
+            <span class="pill">{{ m.country }}</span>
+            <div>{{ m.league }}</div>
+          </td>
+          <td>
+            <strong>{{ m.home }}</strong>
+            {% if m.home_score is not none %}
+              <span class="score">{{ m.home_score }}–{{ m.away_score }}</span>
+            {% else %}
+              <span class="vs">vs</span>
+            {% endif %}
+            <strong>{{ m.away }}</strong>
+            {% if m.venue %}<div class="muted tiny">{{ m.venue }}</div>{% endif %}
+          </td>
+          <td><span class="status s-{{ m.status }}">{{ m.status }}</span></td>
+          <td class="mono">
+            {% if m.prediction %}
+              {{ '%.0f'|format(m.prediction.p_home*100) }} /
+              {{ '%.0f'|format(m.prediction.p_draw*100) }} /
+              {{ '%.0f'|format(m.prediction.p_away*100) }}
+            {% else %}—{% endif %}
+          </td>
+          <td class="mono">
+            {% if m.prediction %}{{ m.prediction.score_home }}–{{ m.prediction.score_away }}{% else %}—{% endif %}
+          </td>
+          <td><a class="link" href="/match/{{ m.id }}">Details</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="muted">No matches in this window. Click <strong>Refresh data</strong> or run the collect script.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <footer>
+    <p>Sources: ESPN · TheSportsDB · OpenLigaDB · football-data.co.uk · Open-Meteo · optional football-data.org</p>
+    <p class="muted">Repo target: github.com/Skywalker1213/football-platform · User: Joseph Ng</p>
+  </footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>
