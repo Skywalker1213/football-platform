@@ -128,7 +128,7 @@ def upsert_matches(matches: Iterable[Dict[str, Any]]) -> int:
             comp = match_competition(m.get("league"), m.get("country"))
             if not comp:
                 continue
-            key = dedupe_key(m)
+            key = dedupe_key({**m, "competition_key": comp["key"], "league": comp["name"], "country": comp["country"]})
             extra = m.get("extra") or {}
             if isinstance(extra, str):
                 extra_s = extra

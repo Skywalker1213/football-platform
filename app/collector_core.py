@@ -381,12 +381,27 @@ def _norm_league(name: Optional[str]) -> str:
 
 
 def dedupe_key(m: Dict[str, Any]) -> str:
+    """Stable identity: date + teams + competition_key (not raw league label).
+
+    ESPN uses "Scottish Premiership" while football-data.co.uk uses "Premiership";
+    both map to sco_pre — using competition_key prevents duplicate UI rows.
+    """
+    comp = (m.get("competition_key") or "").strip()
+    if not comp:
+        try:
+            from app.competitions import match_competition
+            c = match_competition(m.get("league"), m.get("country"))
+            comp = (c or {}).get("key") or ""
+        except Exception:
+            comp = ""
+    if not comp:
+        comp = _norm_league(m.get("league"))
     return "|".join(
         [
             (m.get("date") or ""),
             _norm_team(m.get("home")),
             _norm_team(m.get("away")),
-            _norm_league(m.get("league")),
+            comp,
         ]
     )
 
