@@ -1,6 +1,6 @@
-# Football Platform MVP
+# Quant-Striker | 足球量化預測系統
 
-Ops-dashboard style web app for **fixtures/results collection** and **statistical result prediction**.
+Ops-dashboard style web app for **fixtures/results collection** and **statistical result prediction** (Quant-Striker v3 ideas ported into the Python stack).
 
 - Path: `/workspace/football-platform/`
 - Intended GitHub repo: https://github.com/Skywalker1213/football-platform
@@ -103,27 +103,47 @@ Collector core adapted from `/workspace/football-data/collect.py`.
 | Player recent form | **Stub** | Interface only — free sources sparse |
 | Injuries / availability | **Stub** | No reliable free cross-league feed |
 | True mental state | **Documented unavailable** | Minutes/load proxies only |
+| Quant-Striker five-factor layer | **Live** (ported) | form30/geo/stakes live; playerImpact estimated stub; commercial if market odds |
+| QS confidence + EV scan | **Live** | System card in consensus/features_json; EV research-only |
 
 ## Prediction model
 
 1. Assign Elo priors (big-club table + competition tier).
 2. Update Elo chronologically on finished matches (K=20, home adv, GD scaling).
-3. Map Elo difference + home advantage + form + congestion + mild weather to Poisson λ.
-4. Apply Dixon–Coles low-score correction; read 1X2 probs + mode scoreline.
-5. Store feature factors for the UI breakdown.
+3. **Quant-Striker layer** (ported concepts from local QS v3): composite Elo (0.6 real + 0.4 PPG/GD power-rank proxy) + five capped factors (form30, playerImpact, geo, commercial, stakes) → adjusted Elo / λ multipliers.
+4. Map adjusted Elo + home advantage + form + congestion + mild weather to Poisson λ; apply QS λ multipliers.
+5. Dixon–Coles low-score correction → model 1X2; blend with ClubElo / market / experts / Pi-ratings / quantum-inspired.
+6. Attach **Quant-Striker system card** from *final* blended probs: result call, consistent scoreline, confidence tier (STRONG ≥72% / LEAN ≥58% / TOSS-UP), optional EV scan vs public odds (**research only — not betting advice**).
+
+**Pipeline order (documented):** base Elo → QS factors → Poisson → market/Pi/quantum blend → QS system card.
 
 Accuracy metrics: 3-way result hit-rate, exact score hit-rate, multi-class Brier.
+
+### Quant-Striker factor mapping
+
+| QS factor | Platform source | Cap |
+|-----------|-----------------|-----|
+| form30 | Decay-weighted PPG/GD from local finished history | ±60 Elo |
+| playerImpact | injuries / player_form (stubs → δ=0, marked estimated) | ±40 Elo |
+| geo | Open-Meteo weather + `weather_scoring_adj` → λ multipliers | ~8% λ |
+| commercial | Market disagreement vs model (football-data.co.uk odds in `extra`) | ±30 Elo |
+| stakes | UCL / friendly / fixture-load congestion heuristics | ~5% λ |
+
+Config: `config/quant_striker.json`. Module: `app/quant_striker.py`. Attribution: user's local Quant-Striker v3 engine concepts (no Transfermarkt / fragile HTML odds scrapers).
 
 ## Project layout
 
 ```
 app/
-  main.py            # FastAPI + Jinja UI
+  main.py            # FastAPI + Jinja UI (Quant-Striker branding)
   db.py              # SQLite
   competitions.py    # Allowlist
   collector_core.py  # Free-source collector
   features.py        # Weather / load / stubs
-  predict.py         # Elo + Poisson
+  predict.py         # Elo + QS factors + Poisson + blends
+  quant_striker.py   # QS v3 port (factors, system card, EV)
+config/
+  quant_striker.json # QS model / factor weights & caps
 scripts/
   seed.py, collect_cli.py, predict_cli.py
 templates/, static/
@@ -133,3 +153,16 @@ data/football.db
 ## Tech stack
 
 **Option C (shipped):** FastAPI + Jinja2 HTML dashboard + SQLite + stdlib HTTP collector.
+
+## YouTube short-form pipeline
+
+Daily ~3 min landscape video from top-6 Quant-Striker confidence picks (zh-Hant).
+
+```bash
+PYTHONPATH=. python scripts/make_youtube_video.py
+```
+
+Outputs: `data/youtube/quant_striker_picks.mp4` + title/description/tags.  
+Details: [docs/YOUTUBE_PIPELINE.md](docs/YOUTUBE_PIPELINE.md).  
+**Does not upload** — research/education only, not gambling advice.
+

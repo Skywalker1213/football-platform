@@ -527,6 +527,7 @@ def init_db() -> None:
         conn.executescript(SCHEMA)
         conn.executescript(LEARNING_SCHEMA)
         conn.executescript(EXPERT_SCHEMA)
+        conn.executescript(SCORECARD_SCHEMA)
         # Seed default model params if empty
         row = conn.execute("SELECT COUNT(*) c FROM model_params").fetchone()
         if row and int(row["c"]) == 0:
@@ -837,3 +838,117 @@ def media_notes_for_teams(home: str, away: str, limit: int = 8) -> List[Dict[str
             break
     return out
 
+
+
+# --- Scorecard (prediction vs result) ---
+
+SCORECARD_SCHEMA = """
+CREATE TABLE IF NOT EXISTS scorecard (
+    match_id INTEGER PRIMARY KEY,
+    actual_1x2 TEXT,
+    pred_1x2 TEXT,
+    hit_1x2 INTEGER,
+    hit_score INTEGER,
+    brier REAL,
+    log_loss REAL,
+    qs_confidence TEXT,
+    qs_result_call TEXT,
+    qs_hit INTEGER,
+    p_home REAL,
+    p_draw REAL,
+    p_away REAL,
+    pred_score_home INTEGER,
+    pred_score_away INTEGER,
+    actual_score_home INTEGER,
+    actual_score_away INTEGER,
+    competition_key TEXT,
+    league TEXT,
+    country TEXT,
+    home TEXT,
+    away TEXT,
+    match_date TEXT,
+    scored_at TEXT,
+    FOREIGN KEY(match_id) REFERENCES matches(id)
+);
+CREATE INDEX IF NOT EXISTS idx_scorecard_date ON scorecard(match_date);
+CREATE INDEX IF NOT EXISTS idx_scorecard_comp ON scorecard(competition_key);
+"""
+
+
+def ensure_scorecard_schema(conn: Optional[sqlite3.Connection] = None) -> None:
+    if conn is not None:
+        conn.executescript(SCORECARD_SCHEMA)
+        return
+    with get_db() as c:
+        c.executescript(SCORECARD_SCHEMA)
+
+
+def upsert_scorecard_row(row: Dict[str, Any]) -> None:
+    with get_db() as conn:
+        ensure_scorecard_schema(conn)
+        conn.execute(
+            """
+            INSERT INTO scorecard (
+                match_id, actual_1x2, pred_1x2, hit_1x2, hit_score, brier, log_loss,
+                qs_confidence, qs_result_call, qs_hit,
+                p_home, p_draw, p_away, pred_score_home, pred_score_away,
+                actual_score_home, actual_score_away, competition_key, league, country,
+                home, away, match_date, scored_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(match_id) DO UPDATE SET
+                actual_1x2=excluded.actual_1x2, pred_1x2=excluded.pred_1x2,
+                hit_1x2=excluded.hit_1x2, hit_score=excluded.hit_score,
+                brier=excluded.brier, log_loss=excluded.log_loss,
+                qs_confidence=excluded.qs_confidence, qs_result_call=excluded.qs_result_call,
+                qs_hit=excluded.qs_hit,
+                p_home=excluded.p_home, p_draw=excluded.p_draw, p_away=excluded.p_away,
+                pred_score_home=excluded.pred_score_home, pred_score_away=excluded.pred_score_away,
+                actual_score_home=excluded.actual_score_home, actual_score_away=excluded.actual_score_away,
+                competition_key=excluded.competition_key, league=excluded.league, country=excluded.country,
+                home=excluded.home, away=excluded.away, match_date=excluded.match_date,
+                scored_at=excluded.scored_at
+            """,
+            (
+                int(row["match_id"]),
+                row.get("actual_1x2"),
+                row.get("pred_1x2"),
+                int(row["hit_1x2"]) if row.get("hit_1x2") is not None else None,
+                int(row["hit_score"]) if row.get("hit_score") is not None else None,
+                row.get("brier"),
+                row.get("log_loss"),
+                row.get("qs_confidence"),
+                row.get("qs_result_call"),
+                int(row["qs_hit"]) if row.get("qs_hit") is not None else None,
+                row.get("p_home"),
+                row.get("p_draw"),
+                row.get("p_away"),
+                row.get("pred_score_home"),
+                row.get("pred_score_away"),
+                row.get("actual_score_home"),
+                row.get("actual_score_away"),
+                row.get("competition_key"),
+                row.get("league"),
+                row.get("country"),
+                row.get("home"),
+                row.get("away"),
+                row.get("match_date"),
+                row.get("scored_at"),
+            ),
+        )
+
+
+def get_scorecard(match_id: int) -> Optional[Dict[str, Any]]:
+    with get_db() as conn:
+        ensure_scorecard_schema(conn)
+        row = conn.execute("SELECT * FROM scorecard WHERE match_id=?", (match_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_scorecard(limit: int = 500) -> List[Dict[str, Any]]:
+    with get_db() as conn:
+        ensure_scorecard_schema(conn)
+        rows = conn.execute(
+            "SELECT * FROM scorecard ORDER BY match_date DESC, match_id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return [dict(r) for r in rows]

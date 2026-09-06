@@ -1,0 +1,46 @@
+{
+  "model": {
+    "baselineLambda": 1.3,
+    "rho": -0.13,
+    "maxGoals": 8,
+    "eloSensitivity": 0.00201,
+    "hostBonus": 0.15,
+    "marketBlendWeight": 1.0,
+    "eloBlend": {
+      "realElo": 0.6,
+      "rankElo": 0.4
+    },
+    "rankEloFit": {
+      "a": 2058.9,
+      "b": 9.0
+    },
+    "fallbackRating": 1500,
+    "ppgEloScale": 220.0,
+    "gdpgEloScale": 80.0
+  },
+  "factorWeights": {
+    "form30": 0.7,
+    "playerImpact": 1.0,
+    "geo": 1.0,
+    "commercial": 1.6,
+    "stakes": 1.3
+  },
+  "factorCaps": {
+    "form30MaxDelta": 60,
+    "playerImpactMaxDelta": 40,
+    "commercialMaxDelta": 30,
+    "geoMaxLambdaPenalty": 0.08,
+    "stakesMaxLambdaSwing": 0.05
+  },
+  "form30": {
+    "decayXi": 0.005,
+    "baselinePpg": 1.55,
+    "maxMatches": 30
+  },
+  "evThreshold": 0.03,
+  "confidence": {
+    "strong": 0.72,
+    "lean": 0.58
+  },
+  "attribution": "Quant-Striker v3 engine concepts (local port; research only — not betting advice)"
+}

@@ -1,4 +1,8 @@
-"""Elo + Poisson (Dixon-Coles-lite) result prediction."""
+"""Elo + Poisson (Dixon-Coles-lite) result prediction.
+
+Quant-Striker v3 port: base Elo → QS factors → Poisson → market/Pi/quantum
+blend → QS system card from final probs (see app/quant_striker.py).
+"""
 from __future__ import annotations
 
 import hashlib
@@ -516,7 +520,41 @@ def predict_match(match: Dict[str, Any], persist: bool = True) -> Dict[str, Any]
     features = build_features_for_match(match, home_hist, away_hist)
 
     params = get_active_params()
-    lam_h, lam_a = lambdas_from_elo_and_features(elo_h, elo_a, features, params=params)
+
+    # --- Quant-Striker v3: composite Elo + five-factor layer (before Poisson) ---
+    # Documented order: base Elo → QS factors → Poisson → market/Pi/quantum → QS system card
+    qs_early: Dict[str, Any] = {}
+    elo_h_use, elo_a_use = elo_h, elo_a
+    qs_lam_mul_h = qs_lam_mul_a = 1.0
+    try:
+        from app.quant_striker import apply_qs_to_lambdas
+        _extra_early = match.get("extra") or {}
+        if isinstance(_extra_early, str):
+            try:
+                import json as _json_qs
+                _extra_early = _json_qs.loads(_extra_early)
+            except Exception:
+                _extra_early = {}
+        _market_peek = None
+        try:
+            from app.consensus import market_from_extra as _mfe
+            _market_peek = _mfe(_extra_early if isinstance(_extra_early, dict) else {})
+        except Exception:
+            _market_peek = None
+        qs_early = apply_qs_to_lambdas(
+            elo_h, elo_a, features, match, home_hist, away_hist,
+            market=_market_peek,
+        )
+        elo_h_use = float(qs_early["elo_home"])
+        elo_a_use = float(qs_early["elo_away"])
+        qs_lam_mul_h = float(qs_early.get("lam_mul_home") or 1.0)
+        qs_lam_mul_a = float(qs_early.get("lam_mul_away") or 1.0)
+    except Exception as e:
+        qs_early = {"error": f"{type(e).__name__}: {e}"}
+
+    lam_h, lam_a = lambdas_from_elo_and_features(elo_h_use, elo_a_use, features, params=params)
+    lam_h = max(0.35, min(3.2, lam_h * qs_lam_mul_h))
+    lam_a = max(0.30, min(3.0, lam_a * qs_lam_mul_a))
     rho = float(params.get("rho", RHO))
     # Mild λ nudge from market O/U 2.5 when present (prefer market to drive scoring level)
     extra = match.get("extra") or {}
@@ -632,8 +670,16 @@ def predict_match(match: Dict[str, Any], persist: bool = True) -> Dict[str, Any]
     blend_info: Dict[str, Any] = {"blended": False, "sources": ["model"], "weights": {"model": 1.0}}
     ph, pd, pa = ph_m, pd_m, pa_m
     try:
+        blend_params = dict(params)
+        try:
+            from app.quant_striker import load_config as _qs_load
+            _mbw = (_qs_load().get("model") or {}).get("marketBlendWeight")
+            if _mbw is not None:
+                blend_params["blend_w_market"] = float(_mbw)
+        except Exception:
+            pass
         (ph, pd, pa), blend_info = blend_probs(
-            (ph_m, pd_m, pa_m), clubelo, market, weights=params, experts=experts
+            (ph_m, pd_m, pa_m), clubelo, market, weights=blend_params, experts=experts
         )
     except Exception as e:
         consensus["blend_error"] = f"{type(e).__name__}: {e}"
@@ -738,6 +784,53 @@ def predict_match(match: Dict[str, Any], persist: bool = True) -> Dict[str, Any]
     tops.extend(rest)
     tops = tops[:6]
 
+    # --- Quant-Striker system card from final blended probs ---
+    quant_striker: Dict[str, Any] = {}
+    try:
+        from app.quant_striker import build_quant_striker
+        quant_striker = build_quant_striker(
+            match=match,
+            elo_home=elo_h,
+            elo_away=elo_a,
+            features=features,
+            home_hist=home_hist,
+            away_hist=away_hist,
+            market=market,
+            model_probs=(ph_m, pd_m, pa_m),
+            final_probs=(ph, pd, pa),
+            tops=tops,
+        )
+        # Align displayed adjusted Elo / factor totals with values that fed Poisson
+        if qs_early and not qs_early.get("error"):
+            quant_striker["adjusted_elo"] = {
+                **(quant_striker.get("adjusted_elo") or {}),
+                "home_base": round(float(qs_early.get("base_home", elo_h)), 2),
+                "away_base": round(float(qs_early.get("base_away", elo_a)), 2),
+                "home": round(float(qs_early["elo_home"]), 2),
+                "away": round(float(qs_early["elo_away"]), 2),
+                "home_meta": (qs_early.get("base_meta") or {}).get("home"),
+                "away_meta": (qs_early.get("base_meta") or {}).get("away"),
+            }
+            fx = qs_early.get("fx") or {}
+            if fx.get("breakdown"):
+                quant_striker["factors"] = fx["breakdown"]
+            quant_striker["factor_totals"] = {
+                "delta_home": round(float(fx.get("delta_home") or 0), 2),
+                "delta_away": round(float(fx.get("delta_away") or 0), 2),
+                "lam_mul_home": round(float(fx.get("lam_mul_home") or 1), 4),
+                "lam_mul_away": round(float(fx.get("lam_mul_away") or 1), 4),
+            }
+            if qs_early.get("form30"):
+                quant_striker["form30"] = qs_early["form30"]
+        consensus["quant_striker"] = quant_striker
+        features["quant_striker"] = quant_striker
+        fm = dict(features.get("feature_matrix") or {})
+        fm["quant_striker"] = "live"
+        features["feature_matrix"] = fm
+    except Exception as e:
+        quant_striker = {"error": f"{type(e).__name__}: {e}"}
+        consensus["quant_striker_error"] = quant_striker["error"]
+
     # Feature factor breakdown for UI
     factors = [
         {"name": "Home Elo", "value": round(elo_h, 1), "impact": "strength"},
@@ -763,6 +856,19 @@ def predict_match(match: Dict[str, Any], persist: bool = True) -> Dict[str, Any]
         })
     factors.append({"name": "Injuries", "value": "stub — not used", "impact": "stub"})
     factors.append({"name": "Player form", "value": "stub — team form used", "impact": "stub"})
+    if quant_striker and quant_striker.get("confidence"):
+        factors.append({
+            "name": "Quant-Striker confidence",
+            "value": quant_striker.get("confidence"),
+            "impact": "quant_striker",
+        })
+        sys_ = quant_striker.get("system") or {}
+        if sys_.get("result_call"):
+            factors.append({
+                "name": "Quant-Striker call",
+                "value": f"{sys_.get('result_call')} ({sys_.get('outcome')}) @ {sys_.get('outcome_p')}",
+                "impact": "quant_striker",
+            })
     if blend_info.get("blended"):
         factors.append({
             "name": "Consensus blend",
@@ -787,7 +893,7 @@ def predict_match(match: Dict[str, Any], persist: bool = True) -> Dict[str, Any]
         "stat_score_away": stat_a,
         "lambda_home": round(lam_h, 4),
         "lambda_away": round(lam_a, 4),
-        "model": "elo_poisson_dixon_coles_human",
+        "model": "elo_qs_poisson_dixon_coles_human",
         "top_scorelines": tops,
         "consensus": consensus,
         "features": features,

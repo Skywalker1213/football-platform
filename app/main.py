@@ -18,10 +18,11 @@ sys.path.insert(0, str(ROOT))
 from app import db
 from app.competitions import competitions_by_country, countries
 from app.predict import rebuild_elo, predict_all, predict_match
-from app.db import latest_learning_run, get_model_params
+from app.db import latest_learning_run, get_model_params, get_scorecard
+from app.scorecard import get_summary as get_scorecard_summary
 from app.collector_core import collect, today_hkt, parse_ymd
 
-app = FastAPI(title="足球平台", version="0.1.0")
+app = FastAPI(title="Quant-Striker | 足球量化預測系統", version="0.2.0")
 app.mount("/static", StaticFiles(directory=str(ROOT / "static")), name="static")
 templates = Jinja2Templates(directory=str(ROOT / "templates"))
 
@@ -68,8 +69,19 @@ def _startup() -> None:
 
 
 def _default_window():
+    """Dashboard window: 2 days before today → 3 days after (HKT)."""
     t = today_hkt()
-    return (t - timedelta(days=3)).isoformat(), (t + timedelta(days=4)).isoformat()
+    return (t - timedelta(days=2)).isoformat(), (t + timedelta(days=3)).isoformat()
+
+
+def _clamp_to_dashboard_window(date_from: Optional[str], date_to: Optional[str]):
+    """Force index/API listings into the -2…+3 HKT window."""
+    lo, hi = _default_window()
+    date_from = max(date_from, lo) if date_from else lo
+    date_to = min(date_to, hi) if date_to else hi
+    if date_from > date_to:
+        date_from, date_to = lo, hi
+    return date_from, date_to
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -81,9 +93,7 @@ async def index(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ):
-    df, dt = _default_window()
-    date_from = date_from or df
-    date_to = date_to or dt
+    date_from, date_to = _clamp_to_dashboard_window(date_from, date_to)
     matches = db.query_matches(
         date_from=date_from,
         date_to=date_to,
@@ -100,6 +110,10 @@ async def index(
     accuracy = db.accuracy_stats()
     learning = latest_learning_run()
     model_params = get_model_params()
+    try:
+        scorecard = get_scorecard_summary(refresh=False)
+    except Exception:
+        scorecard = {"n": 0}
     report_path = ROOT / "data" / "daily_report.md"
     daily_report_time = None
     if report_path.exists():
@@ -125,6 +139,8 @@ async def index(
             collect_status=_collect_status,
             learning=learning,
             model_params=model_params,
+            scorecard=scorecard,
+            window_label="香港時間：今日前 2 日 → 後 3 日",
             daily_report_time=daily_report_time,
         ),
     )
@@ -150,12 +166,32 @@ async def match_detail(request: Request, match_id: int):
     consensus = (pred or {}).get("consensus") or feats.get("consensus") or {}
     top_scorelines = (pred or {}).get("top_scorelines") or feats.get("top_scorelines") or []
     blend = (consensus.get("blend") if isinstance(consensus, dict) else None) or {}
+    scorecard_row = None
+    if (m.get("status") or "").upper() == "FINISHED":
+        try:
+            scorecard_row = get_scorecard(int(match_id))
+            if scorecard_row is None and pred and m.get("home_score") is not None:
+                from app.scorecard import score_row_from_finished
+                row = {
+                    **m,
+                    "p_home": pred.get("p_home"),
+                    "p_draw": pred.get("p_draw"),
+                    "p_away": pred.get("p_away"),
+                    "pred_score_home": pred.get("score_home"),
+                    "pred_score_away": pred.get("score_away"),
+                    "features": pred.get("features") or {},
+                }
+                scorecard_row = score_row_from_finished(row)
+                db.upsert_scorecard_row(scorecard_row)
+        except Exception:
+            scorecard_row = None
     return templates.TemplateResponse(
         request,
         "match.html",
         _ui_ctx(
             match=m,
             prediction=pred,
+            scorecard=scorecard_row,
             factors=feats.get("factors") or [],
             feature_matrix=feats.get("feature_matrix") or {},
             weather_json=_json.dumps(feats.get("weather") or {}, indent=2, ensure_ascii=False),
@@ -180,10 +216,10 @@ async def api_matches(
     date_to: Optional[str] = None,
     limit: int = Query(200, le=500),
 ):
-    df, dt = _default_window()
+    date_from, date_to = _clamp_to_dashboard_window(date_from, date_to)
     matches = db.query_matches(
-        date_from=date_from or df,
-        date_to=date_to or dt,
+        date_from=date_from,
+        date_to=date_to,
         country=country,
         competition_key=competition,
         status=status,
@@ -227,8 +263,10 @@ def _run_collect(date_from: str, date_to: str) -> None:
     try:
         matches, meta = collect(parse_ymd(date_from), parse_ymd(date_to))
         n = db.upsert_matches(matches)
-        from app.learning import run_learning
-        learn = run_learning()
+        from app.scorecard import run_scorecard_and_finetune
+        pipe = run_scorecard_and_finetune()
+        learn = pipe.get("learning") or {}
+        sc = pipe.get("scorecard") or {}
         predicted = predict_all(limit=400)
         _collect_status = {
             "running": False,
@@ -236,11 +274,14 @@ def _run_collect(date_from: str, date_to: str) -> None:
             "message": (
                 f"已寫入 {n}/{meta.get('match_count')} 場允許賽事；"
                 f"Elo 用咗 {learn.get('elo_finished')} 場完場；"
-                f"學習 n={learn.get('finished_n')} Brier={learn.get('brier')}；"
+                f"計分卡 n={sc.get('n')} 1X2={sc.get('hit_1x2_rate')}；"
+                f"學習 Brier={learn.get('brier')}；"
                 f"預測 {predicted} 場。"
             ),
             "meta": meta,
             "learning": learn,
+            "scorecard": sc,
+            "qs_finetune": pipe.get("qs_finetune"),
         }
     except Exception as e:
         _collect_status = {
@@ -283,3 +324,8 @@ async def api_learning():
         "params": get_model_params(),
         "accuracy": db.accuracy_stats(),
     }
+
+
+@app.get("/api/scorecard")
+async def api_scorecard(refresh: bool = False):
+    return get_scorecard_summary(refresh=refresh)

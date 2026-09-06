@@ -95,3 +95,23 @@ ClubElo responses are cached under `cache/` (≥6h positive; ~3h negative for de
 ### Quantum-inspired Born interference (experimental)
 - Classical complex amplitudes + phase shifts from Elo/Pi/form/market disagreement.
 - Collapse via Born rule `|A|²`. **Not quantum hardware** — documented analogy in `app/quantum_inspired.py`.
+
+
+## Quant-Striker v3 ideas (ported)
+
+Attribution: concepts from the user's local **Quant-Striker v3** Node engine
+(`config/settings.json`, factor layer, system prediction, EV scan) — adapted to
+this Python platform's existing feature matrix. **Not quantum hardware.**
+
+| Idea | Implementation |
+|------|----------------|
+| Composite Elo (real + power-rank proxy) | `app/quant_striker.py` — 0.6 Elo + 0.4 PPG/GD proxy |
+| Five capped factors | form30, playerImpact, geo, commercial, stakes |
+| System prediction + confidence | STRONG / LEAN / TOSS-UP on final blended probs |
+| EV scan | vs football-data.co.uk decimal odds when present; research flag only |
+
+**Not ported:** Transfermarkt squad-value scraping, fragile HTML odds scrapers.
+Uses platform proxies (form, injuries stubs, weather, ClubElo/market/experts, Pi, quantum-inspired).
+
+Config: `config/quant_striker.json`. Stored on each prediction as
+`features.quant_striker` / `consensus.quant_striker`.

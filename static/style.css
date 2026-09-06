@@ -94,3 +94,21 @@ footer { padding: 1rem 1.5rem 2rem; color: var(--muted); font-size: .85rem; bord
 .tips-list { list-style: none; padding: 0; margin: .5rem 0 0; }
 .tips-list li { padding: .45rem 0; border-bottom: 1px solid var(--border); font-size: .92rem; }
 .tips-list li:last-child { border-bottom: 0; }
+
+.badge-qs { border: 1px solid #4a6fa5; background: #1a2a44; color: #9ec5ff; }
+.badge-qs-STRONG { background: #1e3a2f; color: #8dffb5; border-color: #2f6b4f; }
+.badge-qs-LEAN { background: #3a3420; color: #ffd27a; border-color: #8a7030; }
+.badge-qs-TOSS-UP { background: #2a3038; color: #b7c7de; border-color: #4a5568; }
+.badge-ev { background: #3a1f3a; color: #e8a0e8; border: 1px solid #6b3f6b; }
+.qs-card { margin: 0 1.5rem 1rem; border-color: #3d6aa5; }
+.qs-call { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: .6rem 0 1rem; }
+.qs-call .lbl { display: block; color: var(--muted); font-size: .8rem; }
+
+.badge-hit { background: #1e3a2f; color: #8dffb5; border: 1px solid #2f6b4f; }
+.badge-miss { background: #3a1f24; color: #ff9aa2; border: 1px solid #6b2f3a; }
+.scorecard-card { margin: 0 1.5rem 1rem; border-color: #4a6fa5; }
+.scorecard-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: .85rem; margin: .5rem 0 .75rem;
+}
+.scorecard-grid .lbl { display: block; color: var(--muted); font-size: .8rem; }

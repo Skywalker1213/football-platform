@@ -61,3 +61,10 @@ PYTHONPATH=. python scripts/import_expert_tips.py --fetch-rss
 - Free feeds still duplicate club names across sources.
 - Exact-score mode remains Poisson-heavy toward 1-1 at λ≈1.4–1.6; diversity is in **top-5** + market/ClubElo when available.
 - No Flashscore / Sofascore / Forebet / PredictZ auto-scrape (intentional).
+
+## Quant-Striker v3 port (2026-09-05)
+
+- `app/quant_striker.py` + `config/quant_striker.json`
+- Wired: base Elo → QS factors → Poisson → blends → QS system card
+- UI rebrand: Quant-Striker | 足球量化預測系統
+- Research only; playerImpact estimated (injury stubs); no Transfermarkt scrape

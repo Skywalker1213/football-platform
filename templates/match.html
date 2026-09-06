@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ match.home }} 對 {{ match.away }} — 足球平台</title>
+  <title>{{ match.home }} 對 {{ match.away }} — Quant-Striker</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
@@ -36,7 +36,7 @@
         <div><span class="lbl">客勝</span><strong>{{ '%.1f'|format(prediction.p_away*100) }}%</strong></div>
       </div>
       {% if consensus_blend and consensus_blend.blended %}
-      <p><span class="badge badge-consensus">{% set _lab = {'model':'模型','market':'市場','clubelo':'ClubElo','experts':'專家','pi_ratings':'Pi-ratings','quantum_inspired':'量子啟發'} -%}
+      <p><span class="badge badge-consensus">{% set _lab = {'model':'模型','market':'市場','clubelo':'ClubElo','experts':'專家','pi_ratings':'Pi-ratings','quantum_inspired':'量子啟發','quant_striker':'Quant-Striker'} -%}
 含 {% for s in (consensus_blend.sources or []) %}{{ _lab.get(s, s) }}{% if not loop.last %}／{% endif %}{% endfor %}</span>
          <span class="muted tiny">權重 {{ consensus_blend.weights }}</span></p>
       {% endif %}
@@ -51,6 +51,104 @@
       {% endif %}
     </div>
   </section>
+
+
+  {% if scorecard and match.status == 'FINISHED' %}
+  <section class="card scorecard-card">
+    <h2>預測對照／賽果</h2>
+    <div class="scorecard-grid">
+      <div>
+        <span class="lbl">預測 1X2</span>
+        <strong class="mono">{{ scorecard.pred_1x2 }}</strong>
+        {% if scorecard.hit_1x2 %}
+          <span class="badge badge-hit">命中</span>
+        {% else %}
+          <span class="badge badge-miss">未中</span>
+        {% endif %}
+      </div>
+      <div>
+        <span class="lbl">賽果 1X2</span>
+        <strong class="mono">{{ scorecard.actual_1x2 }}</strong>
+      </div>
+      <div>
+        <span class="lbl">預測比分</span>
+        <strong class="mono">{{ scorecard.pred_score_home }}–{{ scorecard.pred_score_away }}</strong>
+        {% if scorecard.hit_score %}
+          <span class="badge badge-hit">正確比分</span>
+        {% else %}
+          <span class="badge badge-miss">比分未中</span>
+        {% endif %}
+      </div>
+      <div>
+        <span class="lbl">實際比分</span>
+        <strong class="mono">{{ scorecard.actual_score_home }}–{{ scorecard.actual_score_away }}</strong>
+      </div>
+    </div>
+    <p class="muted tiny">Brier {{ scorecard.brier }} · log loss {{ scorecard.log_loss }}
+      {% if scorecard.qs_confidence %} · QS {{ scorecard.qs_confidence }}{% if scorecard.qs_result_call %}（{{ scorecard.qs_result_call }}）{% endif %}
+        {% if scorecard.qs_hit == 1 %}<span class="badge badge-hit">QS 對</span>{% elif scorecard.qs_hit == 0 %}<span class="badge badge-miss">QS 錯</span>{% endif %}
+      {% endif %}
+    </p>
+  </section>
+  {% endif %}
+
+  {% set qs = (consensus.quant_striker if consensus else None) or (prediction.features.quant_striker if prediction and prediction.features else None) %}
+  {% if qs and not qs.error %}
+  <section class="card qs-card">
+    <h2>Quant-Striker 系統預測</h2>
+    <p class="muted tiny">五因素調整 · Dixon–Coles · 信心分層（研究用途，非投注建議）</p>
+    <div class="qs-call">
+      <div>
+        <span class="lbl">結果呼叫</span>
+        <strong>{{ qs.system.result_call if qs.system else '—' }}</strong>
+        {% if qs.system and qs.system.outcome_p %}<span class="muted">（{{ '%.1f'|format(qs.system.outcome_p*100) }}%）</span>{% endif %}
+      </div>
+      <div>
+        <span class="lbl">一致比分</span>
+        <strong class="mono">{{ qs.system.scoreline if qs.system else '—' }}</strong>
+      </div>
+      <div>
+        <span class="lbl">信心</span>
+        <span class="badge badge-qs badge-qs-{{ qs.confidence }}">{{ qs.confidence }}</span>
+        {% if qs.system and qs.system.confidence_p %}<span class="muted tiny">{{ '%.1f'|format(qs.system.confidence_p*100) }}%</span>{% endif %}
+      </div>
+    </div>
+    {% if qs.adjusted_elo %}
+    <p class="muted tiny">調整後 Elo：主 {{ qs.adjusted_elo.home }}（基 {{ qs.adjusted_elo.home_base }}）／客 {{ qs.adjusted_elo.away }}（基 {{ qs.adjusted_elo.away_base }}）
+      {% if qs.factor_totals %} · Δ {{ qs.factor_totals.delta_home }} / {{ qs.factor_totals.delta_away }} · λ× {{ qs.factor_totals.lam_mul_home }} / {{ qs.factor_totals.lam_mul_away }}{% endif %}
+    </p>
+    {% endif %}
+    {% if qs.factors %}
+    <h3>因素拆解</h3>
+    <table>
+      <thead><tr><th>因素</th><th>主 ΔElo</th><th>客 ΔElo</th><th>主 λ×</th><th>客 λ×</th><th>備註</th></tr></thead>
+      <tbody>
+        {% for f in qs.factors %}
+        <tr>
+          <td>{{ f.label or f.key }}</td>
+          <td class="mono">{{ f.delta_home }}</td>
+          <td class="mono">{{ f.delta_away }}</td>
+          <td class="mono">{{ f.lam_mul_home }}</td>
+          <td class="mono">{{ f.lam_mul_away }}</td>
+          <td class="muted tiny">{% if f.notes %}{{ f.notes|join('；') }}{% endif %}{% if f.estimated %} 〔估計〕{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+    {% if qs.ev and qs.ev.available %}
+    <h3>EV 掃描（研究對照）</h3>
+    <p class="muted tiny">{{ qs.ev.note }}</p>
+    <p class="mono tiny">EV H/D/A：{{ qs.ev.ev.H }} / {{ qs.ev.ev.D }} / {{ qs.ev.ev.A }}
+      {% if qs.ev.value_flag %} · <span class="badge badge-ev">+EV {{ qs.ev.value_flag.label }} {{ qs.ev.value_flag.ev }}</span>{% endif %}
+    </p>
+    {% endif %}
+    {% if qs.notes %}
+    <ul class="chips">{% for n in qs.notes[:6] %}<li class="tiny">{{ n }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+  {% endif %}
+
 
   {% if top_scorelines %}
   <section class="card scorelines-card">

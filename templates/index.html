@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>足球平台 — 營運儀表板</title>
+  <title>Quant-Striker | 足球量化預測系統</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
   <header class="top">
     <div>
-      <h1>足球平台</h1>
-      <p class="sub">賽程 · 賽果 · 統計預測 · {{ now_hkt }}</p>
+      <h1>Quant-Striker | 足球量化預測系統</h1>
+      <p class="sub">賽程 · 賽果 · 量化預測 · {{ now_hkt }} · 預設顯示範圍：今日前 2 日 → 後 3 日</p>
     </div>
     <div class="actions">
       <button id="btn-refresh" class="btn">重新整理資料</button>
@@ -39,6 +39,30 @@
       <p class="muted">{{ accuracy.note }}</p>
       {% else %}
       <p class="muted">{{ accuracy.note }}</p>
+      {% endif %}
+    </div>
+
+
+    <div class="card">
+      <h2>預測對照／計分卡</h2>
+      {% if scorecard and scorecard.n %}
+      <p>樣本 n={{ scorecard.n }} · 1X2 命中 <strong>{{ '%.1f'|format((scorecard.hit_1x2_rate or 0) * 100) }}%</strong>
+         · 正確比分 {{ '%.1f'|format((scorecard.hit_score_rate or 0) * 100) }}%</p>
+      <p>Brier {{ scorecard.mean_brier }}（基線 {{ scorecard.baseline_brier }}；優於基線 {{ scorecard.brier_vs_baseline }}）
+         · log loss {{ scorecard.mean_logloss }}</p>
+      {% if scorecard.qs_strong and scorecard.qs_strong.n %}
+      <p class="muted tiny">QS STRONG：n={{ scorecard.qs_strong.n }} · 命中 {{ '%.0f'|format((scorecard.qs_strong.hit_rate or 0)*100) }}% · 錯 {{ scorecard.qs_strong.wrong }}</p>
+      {% endif %}
+      {% if scorecard.qs_finetune %}
+      <p class="muted tiny">最近 QS 微調：Brier {{ scorecard.qs_finetune.brier_before }}→{{ scorecard.qs_finetune.brier_after }}
+        {% if scorecard.qs_finetune.changed %}（已更新權重）{% else %}（無變更）{% endif %}
+        {% if scorecard.qs_finetune.notes %} · {{ scorecard.qs_finetune.notes }}{% endif %}
+      </p>
+      {% elif scorecard.learning and scorecard.learning.notes %}
+      <p class="muted tiny">最近學習：{{ scorecard.learning.notes }}</p>
+      {% endif %}
+      {% else %}
+      <p class="muted">尚未有完場預測對照。跑完 daily_update／計分卡後會顯示。</p>
       {% endif %}
     </div>
 
@@ -171,6 +195,12 @@
               </div>
               {% endif %}
               {% set cons = m.prediction.consensus or (m.prediction.features.consensus if m.prediction.features else None) %}
+              {% set qs = (cons.quant_striker if cons else None) or (m.prediction.features.quant_striker if m.prediction.features else None) %}
+              {% if qs and qs.confidence %}
+                <div><span class="badge badge-qs badge-qs-{{ qs.confidence }} tiny">QS {{ qs.confidence }}</span>
+                  {% if qs.system and qs.system.result_call %}<span class="muted tiny"> {{ qs.system.result_call }}{% if qs.system.scoreline %} · {{ qs.system.scoreline }}{% endif %}</span>{% endif %}
+                </div>
+              {% endif %}
               {% if cons and cons.blend and cons.blend.blended %}
                 <div><span class="badge badge-consensus tiny">含 {% if 'clubelo' in cons.blend.sources %}ClubElo{% endif %}{% if 'clubelo' in cons.blend.sources and ('market' in cons.blend.sources or 'experts' in cons.blend.sources) %}／{% endif %}{% if 'market' in cons.blend.sources %}市場{% endif %}{% if 'market' in cons.blend.sources and 'experts' in cons.blend.sources %}／{% endif %}{% if 'experts' in cons.blend.sources %}專家{% endif %}</span></div>
               {% endif %}
