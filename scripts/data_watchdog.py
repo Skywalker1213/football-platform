@@ -16,6 +16,9 @@ from typing import Any, Dict, List, Tuple
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
+import importlib
+from app import collector_core as _cc
+importlib.reload(_cc)
 from app.collector_core import _norm_team, dedupe_key, teams_likely_same
 from app.db import init_db
 

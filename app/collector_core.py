@@ -301,6 +301,15 @@ def norm_status(raw: Optional[str]) -> Optional[str]:
 
 
 _TEAM_ALIASES = {
+    "hamburger": "hamburger sv",
+    "hamburger sv": "hamburger sv",
+    "mainz": "mainz 05",
+    "mainz 05": "mainz 05",
+    "fsv mainz 05": "mainz 05",
+    "1 fsv mainz 05": "mainz 05",
+    "espanol": "espanyol",
+    "espanyol": "espanyol",
+    "rcd espanyol": "espanyol",
     "man city": "manchester city",
     "man utd": "manchester united",
     "manchester utd": "manchester united",
@@ -421,8 +430,8 @@ _TEAM_ALIASES = {
     "ajax amsterdam": "ajax",
     "schalke 04": "schalke 04",
     "fc schalke 04": "schalke 04",
-    "hamburg": "hamburg sv",
-    "hamburg sv": "hamburg sv",
+    "hamburg": "hamburger sv",
+    "hamburg sv": "hamburger sv",
     "vallecano": "rayo vallecano",
     "santander": "racing santander",
     "racing santander": "racing santander",
@@ -450,9 +459,10 @@ def _norm_team(name: Optional[str]) -> str:
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     # drop common club prefixes/suffixes for matching
-    base = re.sub(r"\b(fc|cf|afc|sc|fk|sk|ac|rc|vfb|sv|tsv|1)\b", " ", s)
+    base = re.sub(r"\b(fc|cf|afc|sc|fk|sk|ac|rc|vfb|sv|tsv|fsv|rcd|1)\b", " ", s)
     base = re.sub(r"\s+", " ", base).strip()
-    for cand in (s, base):
+    # Prefer alias on stripped form first (hamburg sv → hamburg → hamburger sv)
+    for cand in (base, s):
         if cand in _TEAM_ALIASES:
             return _TEAM_ALIASES[cand]
     return base or s
@@ -460,22 +470,43 @@ def _norm_team(name: Optional[str]) -> str:
 
 
 def teams_likely_same(a: Optional[str], b: Optional[str]) -> bool:
-    """True if two display names refer to the same club (alias or containment)."""
+    """True if two display names refer to the same club (alias, stem, or containment)."""
     na, nb = _norm_team(a), _norm_team(b)
     if not na or not nb:
         return False
     if na == nb:
         return True
-    # containment: "celta" vs "celta vigo", "zwolle" vs "pec zwolle"
-    shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
-    if len(shorter) >= 4 and (longer == shorter or longer.startswith(shorter + " ") or longer.endswith(" " + shorter) or f" {shorter} " in f" {longer} "):
+
+    stop = {"fc", "cf", "afc", "sc", "fk", "sk", "ac", "rc", "sv", "vfb", "tsv", "fsv", "1", "ud", "cd", "rcd"}
+
+    def tokens(s: str):
+        return {t for t in s.split() if t not in stop and len(t) > 1}
+
+    ta, tb = tokens(na), tokens(nb)
+    if ta and tb and (ta == tb or ta.issubset(tb) or tb.issubset(ta)):
         return True
-    # token overlap (majority of shorter tokens in longer)
-    ta, tb = set(na.split()), set(nb.split())
-    if not ta or not tb:
-        return False
-    inter = ta & tb
-    if len(inter) >= 1 and (inter == ta or inter == tb):
+
+    # Stem overlap: hamburg~hamburger, espanol~espanyol
+    def stems(s: str):
+        out = set()
+        for tok in tokens(s):
+            out.add(tok)
+            if len(tok) >= 5:
+                out.add(tok[:5])
+            if tok.endswith("er") and len(tok) >= 6:
+                out.add(tok[:-2])  # hamburger -> hamburg
+            if tok.endswith("ol") and len(tok) >= 6:
+                out.add(tok.replace("ny", "n")[:-2] if "ny" in tok else tok[:-2])
+            if "ny" in tok:
+                out.add(tok.replace("ny", "n"))  # espanyol -> espanol
+        return out
+
+    inter = stems(na) & stems(nb)
+    if any(len(x) >= 5 for x in inter):
+        return True
+
+    shorter, longer = (na, nb) if len(na) <= len(nb) else (nb, na)
+    if len(shorter) >= 5 and shorter in longer:
         return True
     return False
 
