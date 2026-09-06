@@ -84,6 +84,36 @@ def _clamp_to_dashboard_window(date_from: Optional[str], date_to: Optional[str])
     return date_from, date_to
 
 
+
+def dedupe_matches_for_display(matches: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Collapse same-fixture rows from different sources (spelling variants)."""
+    from app.collector_core import teams_likely_same
+    out: List[Dict[str, Any]] = []
+    for m in matches:
+        merged = False
+        for keep in out:
+            if keep.get("date") != m.get("date"):
+                continue
+            if keep.get("competition_key") != m.get("competition_key"):
+                continue
+            if teams_likely_same(keep.get("home"), m.get("home")) and teams_likely_same(keep.get("away"), m.get("away")):
+                # Prefer row with venue / longer names / espn
+                score_keep = (2 if keep.get("venue") else 0) + (1 if keep.get("source") == "espn" else 0) + len(keep.get("home") or "")
+                score_m = (2 if m.get("venue") else 0) + (1 if m.get("source") == "espn" else 0) + len(m.get("home") or "")
+                if score_m > score_keep:
+                    # swap content but keep list position
+                    pred = keep.get("prediction")
+                    keep.clear()
+                    keep.update(m)
+                    if pred and not keep.get("prediction"):
+                        keep["prediction"] = pred
+                merged = True
+                break
+        if not merged:
+            out.append(m)
+    return out
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(
     request: Request,
@@ -102,6 +132,7 @@ async def index(
         status=status or None,
         limit=300,
     )
+    matches = dedupe_matches_for_display(matches)
     # attach predictions
     for m in matches:
         pred = db.get_prediction(m["id"])
