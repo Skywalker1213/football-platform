@@ -38,6 +38,12 @@ def _param_diff_lines(before: dict, after: dict) -> list[str]:
         b, a = before.get(k), after.get(k)
         if b is None or a is None:
             continue
+    try:
+        import runpy
+        print("data_watchdog…")
+        runpy.run_path(str(Path(__file__).resolve().parents[1] / "scripts" / "data_watchdog.py"))
+    except Exception as _e:
+        print("data_watchdog skipped:", _e)
         try:
             if abs(float(a) - float(b)) > 1e-9:
                 lines.append(f"- `{k}`: {b} → {a}")

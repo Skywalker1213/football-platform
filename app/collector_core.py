@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import unicodedata
 import csv
 import json
 import os
@@ -442,7 +443,10 @@ _TEAM_ALIASES = {
 def _norm_team(name: Optional[str]) -> str:
     s = (name or "").lower().strip()
     s = s.replace("&", " and ")
-    s = s.replace("ü", "u").replace("ö", "o").replace("ä", "a").replace("ß", "ss")
+    # Fold accents: Alavés→alaves, Málaga→malaga (NFKD + drop combining marks)
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = s.replace("ß", "ss")
     s = re.sub(r"[^a-z0-9\s]", " ", s)
     s = re.sub(r"\s+", " ", s).strip()
     # drop common club prefixes/suffixes for matching
@@ -452,6 +456,7 @@ def _norm_team(name: Optional[str]) -> str:
         if cand in _TEAM_ALIASES:
             return _TEAM_ALIASES[cand]
     return base or s
+
 
 
 def teams_likely_same(a: Optional[str], b: Optional[str]) -> bool:

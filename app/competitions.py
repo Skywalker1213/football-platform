@@ -13,7 +13,7 @@ COMPETITIONS: List[Dict[str, object]] = [
      "patterns": ["bundesliga", "1. bundesliga", "german bundesliga", "1. fußball-bundesliga", "1. fussball-bundesliga"]},
     # Switzerland — Level 1
     {"key": "sui_sl", "country": "Switzerland", "name": "Super League",
-     "patterns": ["swiss super league", "super league"]},
+     "patterns": ["swiss super league", "switzerland super league", "credit suisse super league"]},
     # Scotland — Level 1
     {"key": "sco_pre", "country": "Scotland", "name": "Premiership",
      "patterns": ["scottish premiership", "premiership", "cinch premiership"]},
@@ -40,7 +40,7 @@ COMPETITIONS: List[Dict[str, object]] = [
 # Ambiguous short names need country context
 _AMBIGUOUS = {
     "premiership": {"Scotland": "sco_pre", "England": "eng_pl"},
-    "super league": {"Switzerland": "sui_sl"},
+    "super league": {"Switzerland": "sui_sl"},  # bare "super league" ONLY with Switzerland country
 }
 
 
@@ -69,6 +69,13 @@ def match_competition(league: Optional[str], country: Optional[str] = None) -> O
             if r == "championship" and "scottish premiership" in ln:
                 continue
             return None
+
+    # Greek Super League etc. must never map to Swiss Super League
+    if "greek" in ln or "greece" in cn.lower() or "hellenic" in ln:
+        if "super league" in ln:
+            return None
+    if ln.strip() in {"super league", "superleague"} and "switzerland" not in cn.lower() and "swiss" not in cn.lower() and "swiss" not in ln:
+        return None
 
     for amb, by_country in _AMBIGUOUS.items():
         if ln == amb or ln.endswith(" " + amb):

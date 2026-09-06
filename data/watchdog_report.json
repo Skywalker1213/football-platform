@@ -1,0 +1,19 @@
+{
+  "before": {
+    "match_count": 80,
+    "bogus_swiss_n": 0,
+    "duplicate_groups_n": 0,
+    "stale_dedupe_keys_n": 0,
+    "bogus_swiss": [],
+    "duplicate_groups": []
+  },
+  "heal": null,
+  "after": {
+    "match_count": 80,
+    "bogus_swiss_n": 0,
+    "duplicate_groups_n": 0,
+    "stale_dedupe_keys_n": 0
+  },
+  "ok": true,
+  "checked_at": "2026-09-06T01:57:36.931068+00:00"
+}
